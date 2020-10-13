@@ -26,7 +26,7 @@ Future<void> main(List<String> args) async {
       .addMiddleware(shelf.logRequests())
       .addHandler(_echoRequest);
 
-  final HttpServer server = await io.serve(handler, 'localhost', port);
+  final HttpServer server = await io.serve(handler, '0.0.0.0', port);
   // ignore: avoid_print
   print('Serving at http://${server.address.host}:${server.port}');
 }
