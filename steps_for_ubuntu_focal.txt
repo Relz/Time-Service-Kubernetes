@@ -1,0 +1,86 @@
+# Пошаговая инструкция на примере master-ноды и рабочей ноды (Ubuntu 20.04 Focal Fossa).
+
+# Для начала настроим master-ноду. Запустим на ней скрипт "deploy_kubernetes_service.sh".
+./deploy_kubernetes_service.sh
+
+# Скрипт подскажет, что его нужно запускать с параметром "master" или "worker". В нашем случае "master"
+
+./deploy_kubernetes_service.sh master
+
+# Скрипт проверит систему на возможность настроить master-ноду. Если что-то не так, то скрипт об этом скажет. Исправить проблемы нужно будет самостоятельно, так как решение зависит от конкретного дистрибутива Linux. В случае с чистой системой скрипт скажет, что нам необходимо установить docker, kubeadm, kubelet и kubectl, а также выключить SWAP.
+
+# Чтобы установить пакеты, выполним следующие команды
+
+sudo apt update
+sudo apt install \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg-agent \
+    software-properties-common
+
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+sudo apt update
+sudo apt install docker-ce docker-ce-cli containerd.io
+
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
+sudo apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+sudo apt install kubeadm kubelet kubectl
+
+# Чтобы выключить SWAP, выполним следующую команду
+
+sudo swapoff -a
+
+# Чтобы выключить SWAP при загрузке системы, закомментируем соответствующую строку в файле "/etc/fstab"
+
+# Запустим скрипт снова
+
+./deploy_kubernetes_service.sh master
+
+# Если пакеты успешно установлены и SWAP выключен, то скрипт пойдёт дальше. Если пользователь не состоит в группе "docker", то скрипт добавит пользователя автоматически. Однако, для того, чтобы права группы вступили в силу, перезайдём в учётную запись.
+
+# После перезахода в учётную запись запустим скрипт снова
+
+./deploy_kubernetes_service.sh master
+
+# Запустится инициализация master-ноды. Обратим внимание на вывод, там могут быть проблемы, которые потребуется самостоятельно решить.
+
+# Если же процесс прошёл без ошибок, то в конце выведется команда join, чтобы рабочие ноды могли подключиться к master-ноде. Нам её запоминать не нужно, скрипт сам её вычислит при настройке рабочей ноды.
+
+# Выполним команду "kubectl get nodes", чтобы убедиться в том, что master-нода была успешно настроена. В выводе в строке с master-нодой должен быть статус Ready. Внимание! Статус может быть NotReady некоторое время, поэтому следует набраться терпения и немного подождать прежде чем начинать что-то подозревать.
+
+# В домашней папке в директории ".kube" должен появиться файл "config". Скопируем его в ~/.kube/config рабочей ноды. Так плавно переходим к настройке рабочей ноды.
+
+# На рабочей ноде запускаем скрипт "deploy_kubernetes_service.sh", но с параметром "worker".
+
+./deploy_kubernetes_service.sh worker
+
+# По тому же принципу, что и с master-нодой, нам потребуется установить недостающие пакеты и выключить SWAP. По итогу запустится инициализация рабочей ноды. После успешного завершения выполнения команды можно проверить результат.
+
+kubectl get nodes
+
+# Должны быть 2-е ноды: master и рабочая, обе со статусом "Ready".
+
+# На master-ноде запустим развёртывание docker-образа. Образ выкачивается с Docker Hub.
+
+kubectl create deployment time-service --image=relz/time-service:1.0
+
+# Сервис имеет Web-API метод. Откроем к нему порт.
+
+kubectl expose deployment time-service --port=8080 --type=NodePort
+
+# Узнаем ip-адрес рабочей ноды. Выполним команду на рабочей ноде.
+
+ip addr
+
+# Узнаем порт, который был выделен для доступа к 8080 порту рабочей ноды. Выполним команду на любой ноде.
+
+kubectl get services
+
+# У сервиса с названием "time-service" и типом NodePort запомним порт.
+
+# Откроем в хостовой машине браузер, перейдём по ссылке <ip_worker>:<port_worker>. Видим результат отработки Web-API метода сервиса "time-service".
